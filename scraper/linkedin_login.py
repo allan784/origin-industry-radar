@@ -1,4 +1,3 @@
-python
 """
 ONE-TIME (or occasional) manual login helper for the LinkedIn snapshot tool.
 
