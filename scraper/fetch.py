@@ -1,4 +1,3 @@
-python
 """
 Fetchers: turn source config into a flat list of raw items.
 Each item: {title, url, summary, published, source, source_type}
