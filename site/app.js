@@ -1,91 +1,106 @@
-"""
-Weekly email digest. Reads site/data.json, pulls items from the last 7 days,
-groups by category, sends a plain-text summary email via SMTP.
+const CATEGORY_LABELS = {
+  consumer_fitness_trends: "Consumer fitness",
+  consumer_equipment_trends: "Consumer equipment",
+  gym_trends: "Gym trends",
+  gym_equipment_trends: "Gym equipment",
+  industry_voices: "Industry voices (LinkedIn)",
+};
 
-Requires these GitHub Actions secrets (see README for setup):
-  SMTP_HOST, SMTP_PORT, SMTP_USER, SMTP_PASSWORD, DIGEST_RECIPIENTS
-  (DIGEST_RECIPIENTS = comma-separated email addresses)
+let state = { data: null, cat: "all", region: "all", q: "" };
 
-Uses SMTP rather than a paid transactional email API so it works with a free
-Gmail account + app password, or any other free-tier SMTP provider, without
-locking the project to one vendor.
-"""
-import json
-import os
-import smtplib
-from datetime import datetime, timedelta, timezone
-from email.mime.text import MIMEText
-
-HERE = os.path.dirname(os.path.abspath(__file__))
-DATA_PATH = os.path.join(HERE, "..", "site", "data.json")
-
-CATEGORY_LABELS = {
-    "consumer_fitness_trends": "Consumer fitness trends",
-    "consumer_equipment_trends": "Consumer equipment trends",
-    "gym_trends": "Gym trends",
-    "gym_equipment_trends": "Gym equipment trends",
+async function load() {
+  const res = await fetch("data.json", { cache: "no-store" });
+  state.data = await res.json();
+  render();
 }
 
+function fmtDate(iso) {
+  if (!iso) return "";
+  const d = new Date(iso);
+  if (isNaN(d)) return "";
+  return d.toLocaleDateString("en-GB", { day: "numeric", month: "short" });
+}
 
-def build_digest_text():
-    with open(DATA_PATH, "r", encoding="utf-8") as f:
-        data = json.load(f)
+function matches(item) {
+  if (state.cat !== "all" && item.category !== state.cat) return false;
+  if (state.region === "foresight" && !item.foresight) return false;
+  if (["uk", "us", "au"].includes(state.region) && item.region !== state.region) return false;
+  if (state.q) {
+    const hay = (item.title + " " + (item.summary || "")).toLowerCase();
+    if (!hay.includes(state.q.toLowerCase())) return false;
+  }
+  return true;
+}
 
-    cutoff = datetime.now(timezone.utc) - timedelta(days=7)
-    recent = []
-    for it in data.get("items", []):
-        try:
-            ts = datetime.fromisoformat(it["fetched_at"])
-        except Exception:
-            continue
-        if ts >= cutoff:
-            recent.append(it)
+function render() {
+  const feed = document.getElementById("feed");
+  const lastRun = document.getElementById("lastRun");
+  if (!state.data) return;
 
-    by_cat = {}
-    for it in recent:
-        by_cat.setdefault(it["category"], []).append(it)
+  const runDate = new Date(state.data.last_run);
+  lastRun.textContent = isNaN(runDate)
+    ? "Never run yet"
+    : `Last scan: ${runDate.toLocaleString("en-GB")} · ${state.data.item_count} items tracked`;
 
-    lines = [f"Origin Fitness Industry Radar — weekly digest", f"{len(recent)} new items this week\n"]
-    for cat, label in CATEGORY_LABELS.items():
-        cat_items = by_cat.get(cat, [])
-        if not cat_items:
-            continue
-        lines.append(f"\n{label} ({len(cat_items)})")
-        lines.append("-" * len(f"{label} ({len(cat_items)})"))
-        for it in cat_items[:10]:
-            tag = " [FORESIGHT - not yet UK]" if it.get("foresight") else ""
-            lines.append(f"- {it['title']}{tag}\n  {it['url']}")
-    if not recent:
-        lines.append("\nNo new items this week - either a quiet week or the sources need tuning.")
+  const items = state.data.items.filter(matches);
+  feed.innerHTML = "";
 
-    lines.append("\n\nFull dashboard: see the link shared with the team.")
-    lines.append("Rule-based tagging, not human-reviewed - sanity check before quoting externally.")
-    return "\n".join(lines)
+  if (items.length === 0) {
+    feed.innerHTML = `<div class="empty">No items match these filters yet. Either narrow filters or wait for the next scan.</div>`;
+    return;
+  }
 
+  for (const item of items) {
+    const card = document.createElement("div");
+    card.className = "card";
+    const sectorTags = (item.sectors || [])
+      .filter((s) => s !== "unclassified")
+      .map((s) => `<span class="tag">${s.replace(/_/g, " ")}</span>`)
+      .join("");
+    const foresightTag = item.foresight ? `<span class="tag foresight">foresight — not yet UK</span>` : "";
+    const manualTag = item.source_type === "linkedin_manual" ? `<span class="tag manual">manual snapshot</span>` : "";
 
-def send_email(body: str):
-    host = os.environ["SMTP_HOST"]
-    port = int(os.environ.get("SMTP_PORT", "587"))
-    user = os.environ["SMTP_USER"]
-    password = os.environ["SMTP_PASSWORD"]
-    recipients = [r.strip() for r in os.environ["DIGEST_RECIPIENTS"].split(",") if r.strip()]
+    card.innerHTML = `
+      <a href="${item.url}" target="_blank" rel="noopener">${item.title}</a>
+      <div class="summary">${(item.summary || "").replace(/<[^>]+>/g, "").slice(0, 180)}</div>
+      <div class="tags">
+        <span class="tag">${CATEGORY_LABELS[item.category] || item.category}</span>
+        <span class="tag">${(item.region || "").toUpperCase()}</span>
+        ${sectorTags}
+        ${foresightTag}
+        ${manualTag}
+      </div>
+      <div class="rowmeta">
+        <span>${item.source}</span>
+        <span>${fmtDate(item.fetched_at)}</span>
+      </div>
+    `;
+    feed.appendChild(card);
+  }
+}
 
-    msg = MIMEText(body)
-    msg["Subject"] = "Origin Fitness Industry Radar — weekly digest"
-    msg["From"] = user
-    msg["To"] = ", ".join(recipients)
+function wireFilters() {
+  document.querySelectorAll("#categoryFilters .chip").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      document.querySelectorAll("#categoryFilters .chip").forEach((b) => b.classList.remove("active"));
+      btn.classList.add("active");
+      state.cat = btn.dataset.cat;
+      render();
+    });
+  });
+  document.querySelectorAll("#regionFilters .chip").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      document.querySelectorAll("#regionFilters .chip").forEach((b) => b.classList.remove("active"));
+      btn.classList.add("active");
+      state.region = btn.dataset.region;
+      render();
+    });
+  });
+  document.getElementById("searchBox").addEventListener("input", (e) => {
+    state.q = e.target.value;
+    render();
+  });
+}
 
-    with smtplib.SMTP(host, port) as server:
-        server.starttls()
-        server.login(user, password)
-        server.sendmail(user, recipients, msg.as_string())
-    print(f"Digest sent to {len(recipients)} recipients.")
-
-
-if __name__ == "__main__":
-    text = build_digest_text()
-    print(text)  # always printed to Actions log, useful even if email fails
-    if os.environ.get("SMTP_HOST"):
-        send_email(text)
-    else:
-        print("\n[info] SMTP_HOST not set - skipping send (local test mode).")
+wireFilters();
+load();
