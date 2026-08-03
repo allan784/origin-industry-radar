@@ -1,56 +1,79 @@
-name: Scan sources and publish dashboard
+python
+"""
+Orchestrator: fetch -> classify -> merge with history -> write site/data.json
 
-on:
-  schedule:
-    # 06:00 and 18:00 UTC - adjust if you want different local times
-    - cron: "0 6 * * *"
-    - cron: "0 18 * * *"
-  workflow_dispatch: {}   # lets you trigger a manual run from the Actions tab
+Run twice daily by the GitHub Actions workflow. Keeps a rolling 45-day
+window so the dashboard doesn't grow forever and old news drops off on its
+own.
+"""
+import json
+import os
+from datetime import datetime, timedelta, timezone
 
-permissions:
-  contents: write
-  pages: write
-  id-token: write
+from fetch import fetch_all
+from classify import enrich
 
-concurrency:
-  group: "pages"
-  cancel-in-progress: false
+HERE = os.path.dirname(os.path.abspath(__file__))
+SITE_DIR = os.path.join(HERE, "..", "site")
+DATA_PATH = os.path.join(SITE_DIR, "data.json")
+ROLLING_WINDOW_DAYS = 45
 
-jobs:
-  scan:
-    runs-on: ubuntu-latest
-    environment:
-      name: github-pages
-      url: ${{ steps.deployment.outputs.page_url }}
-    steps:
-      - uses: actions/checkout@v4
 
-      - uses: actions/setup-python@v5
-        with:
-          python-version: "3.11"
+def load_existing():
+    if os.path.exists(DATA_PATH):
+        try:
+            with open(DATA_PATH, "r", encoding="utf-8") as f:
+                return json.load(f)
+        except Exception:
+            return {"items": [], "last_run": None}
+    return {"items": [], "last_run": None}
 
-      - name: Install dependencies
-        run: pip install -r scraper/requirements.txt
 
-      - name: Run scraper and build dashboard
-        run: python scraper/build_dashboard.py
+def prune(items, days=ROLLING_WINDOW_DAYS):
+    cutoff = datetime.now(timezone.utc) - timedelta(days=days)
+    kept = []
+    for it in items:
+        fetched = it.get("fetched_at")
+        try:
+            ts = datetime.fromisoformat(fetched)
+        except Exception:
+            kept.append(it)
+            continue
+        if ts >= cutoff:
+            kept.append(it)
+    return kept
 
-      - name: Commit updated data
-        run: |
-          git config user.name "industry-radar-bot"
-          git config user.email "actions@users.noreply.github.com"
-          git add site/data.json
-          git diff --quiet --cached || git commit -m "Scheduled scan: $(date -u +'%Y-%m-%d %H:%M UTC')"
-          git push
 
-      - name: Setup Pages
-        uses: actions/configure-pages@v5
+def main():
+    existing = load_existing()
+    existing_by_id = {it["id"]: it for it in existing.get("items", [])}
 
-      - name: Upload site artifact
-        uses: actions/upload-pages-artifact@v3
-        with:
-          path: site
+    raw = fetch_all()
+    new_count = 0
+    for category, items in raw.items():
+        enriched = enrich(category, items)
+        for it in enriched:
+            if it["id"] not in existing_by_id:
+                new_count += 1
+            existing_by_id[it["id"]] = it
 
-      - name: Deploy to GitHub Pages
-        id: deployment
-        uses: actions/deploy-pages@v4
+    merged = list(existing_by_id.values())
+    merged = prune(merged)
+    merged.sort(key=lambda x: x.get("fetched_at", ""), reverse=True)
+
+    output = {
+        "last_run": datetime.now(timezone.utc).isoformat(),
+        "item_count": len(merged),
+        "new_this_run": new_count,
+        "items": merged,
+    }
+
+    os.makedirs(SITE_DIR, exist_ok=True)
+    with open(DATA_PATH, "w", encoding="utf-8") as f:
+        json.dump(output, f, indent=2, ensure_ascii=False)
+
+    print(f"Wrote {len(merged)} items ({new_count} new) to {DATA_PATH}")
+
+
+if __name__ == "__main__":
+    main()
