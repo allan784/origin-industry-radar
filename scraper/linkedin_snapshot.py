@@ -1,4 +1,3 @@
-python
 """
 Manual, on-demand LinkedIn snapshot. Run this yourself, from your own
 machine, whenever you want an update on the accounts in linkedin_accounts.csv.
