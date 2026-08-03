@@ -1,87 +1,86 @@
-"""
-Source configuration for the Origin Fitness Industry Radar.
+:root {
+  --bg: #0f1115;
+  --card: #1a1d24;
+  --text: #e8e9ec;
+  --muted: #9aa0ab;
+  --accent: #ff5a3c;
+  --border: #2a2e37;
+}
+* { box-sizing: border-box; }
+body {
+  margin: 0;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  background: var(--bg);
+  color: var(--text);
+}
+.topbar {
+  position: sticky; top: 0; z-index: 10;
+  background: var(--bg);
+  border-bottom: 1px solid var(--border);
+  padding: 14px 16px;
+  display: flex; justify-content: space-between; align-items: baseline;
+  flex-wrap: wrap; gap: 6px;
+}
+.brand { font-weight: 700; font-size: 1.1rem; }
+.brand span { font-weight: 400; color: var(--muted); margin-left: 6px; }
+.meta { font-size: 0.8rem; color: var(--muted); }
 
-v1 scope (per Allan, 31 July 2026):
-  - Consumer fitness trends
-  - Consumer equipment trends
-  - Gym trends (commercial)
-  - Gym equipment trends (commercial)
-
-Design choice: rather than guessing at individual publishers' RSS paths (many
-trade titles don't publish reliable feeds, or move them), v1 uses Google News
-RSS search feeds as the primary mechanism. This is free, requires no API key,
-won't get blocked, and lets us target category + region precisely via query
-strings. It's a breadth-first net, not a hand-picked list of "best" sources -
-expect noise, and expect to tune the queries after the first couple of weeks
-of real output.
-
-Supplemented by:
-  - Reddit's public read-only JSON endpoints (no auth, no login-wall) for
-    consumer sentiment/community signal.
-  - Companies House free API as an optional add-on for UK company accounts
-    data (requires the user's own free API key - see README). Not wired into
-    v1 by default.
-
-KNOWN GAPS (flagged, not silently dropped):
-  - LinkedIn: no free, ToS-compliant, non-authenticated way to pull this at
-    scale. Excluded from automated v1. Recommend a manual monthly check of
-    named competitor/industry-body LinkedIn pages instead.
-  - ukactive / UKREPs / paywalled trade journals: where these publish public
-    RSS we pick it up via Google News; where content sits behind membership,
-    it will not appear here. That's a real coverage gap, not a bug.
-"""
-
-# Region tags used for the "trends abroad, coming to the UK" foresight angle
-REGIONS = {
-    "uk": {"gl": "GB", "ceid": "GB:en", "hl": "en-GB", "label": "UK"},
-    "us": {"gl": "US", "ceid": "US:en", "hl": "en-US", "label": "USA"},
-    "au": {"gl": "AU", "ceid": "AU:en", "hl": "en-AU", "label": "Australia"},
+.filters {
+  padding: 10px 16px;
+  display: flex; flex-direction: column; gap: 8px;
+  border-bottom: 1px solid var(--border);
+  position: sticky; top: 54px; z-index: 9; background: var(--bg);
+}
+.filter-group { display: flex; gap: 6px; flex-wrap: wrap; }
+.chip {
+  background: var(--card);
+  border: 1px solid var(--border);
+  color: var(--text);
+  padding: 6px 12px;
+  border-radius: 999px;
+  font-size: 0.8rem;
+  cursor: pointer;
+}
+.chip.active { background: var(--accent); border-color: var(--accent); color: #fff; }
+#searchBox {
+  background: var(--card);
+  border: 1px solid var(--border);
+  color: var(--text);
+  padding: 8px 12px;
+  border-radius: 8px;
+  font-size: 0.9rem;
 }
 
-# Market sectors we try to tag content against (keyword-matched, best-effort)
-MARKET_SECTORS = {
-    "local_authority": ["local authority", "council leisure", "council-run gym", "public leisure centre", "leisure trust"],
-    "independent_gym": ["independent gym", "boutique gym", "indie gym", "single-site gym"],
-    "chain_gym": ["puregym", "the gym group", "david lloyd", "virgin active", "anytime fitness", "planet fitness",
-                  "f45", "third space", "nuffield health", "everyone active", "better gym", "energie fitness"],
-    "strength_conditioning": ["s&c studio", "strength and conditioning", "strength & conditioning", "performance studio",
-                              "crossfit box", "powerlifting gym"],
-    "budget_gym": ["budget gym", "low-cost gym", "discount gym"],
-    "hotel_corporate": ["hotel gym", "corporate gym", "workplace gym", "office gym"],
-    "home_fitness": ["home gym", "home workout", "connected fitness", "smart home gym"],
+main { padding: 12px 16px 40px; display: grid; gap: 10px; grid-template-columns: 1fr; }
+@media (min-width: 700px) {
+  main { grid-template-columns: 1fr 1fr; }
+}
+@media (min-width: 1100px) {
+  main { grid-template-columns: 1fr 1fr 1fr; }
 }
 
-# category -> list of Google News search queries (region-tagged)
-CATEGORY_QUERIES = {
-    "consumer_fitness_trends": {
-        "uk": ["fitness trend UK gym-goers", "workout trend UK 2026", "fitness class trend UK"],
-        "us": ["fitness trend 2026 America", "workout trend US gym-goers"],
-        "au": ["fitness trend Australia gym-goers"],
-    },
-    "consumer_equipment_trends": {
-        "uk": ["home fitness equipment trend UK", "wearable fitness tech UK consumer"],
-        "us": ["home fitness equipment trend US", "connected fitness equipment America"],
-        "au": ["home fitness equipment trend Australia"],
-    },
-    "gym_trends": {
-        "uk": ["UK gym chain news", "UK health club membership trend", "gym operator UK news"],
-        "us": ["US gym chain news", "American health club trend"],
-        "au": ["Australia gym chain news"],
-    },
-    "gym_equipment_trends": {
-        "uk": ["commercial gym equipment UK", "health club equipment supplier UK"],
-        "us": ["commercial gym equipment US", "fitness equipment manufacturer America"],
-        "au": ["commercial gym equipment Australia"],
-    },
+.card {
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 14px;
+  display: flex; flex-direction: column; gap: 8px;
 }
-
-# Reddit read-only JSON endpoints (no auth required for public listings)
-REDDIT_SOURCES = {
-    "consumer_fitness_trends": ["Fitness", "naturalbodybuilding", "loseit"],
-    "consumer_equipment_trends": ["homegym", "gym_equipment"],
-    "gym_trends": ["personaltraining"],
-    "gym_equipment_trends": ["homegym"],
+.card a { color: var(--text); text-decoration: none; font-weight: 600; font-size: 0.95rem; line-height: 1.3; }
+.card a:hover { color: var(--accent); }
+.card .summary { color: var(--muted); font-size: 0.82rem; line-height: 1.4; }
+.tags { display: flex; flex-wrap: wrap; gap: 5px; }
+.tag {
+  font-size: 0.68rem;
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: #262b35;
+  color: var(--muted);
+  border: 1px solid var(--border);
 }
+.tag.foresight { background: #3a2411; color: #ffb37a; border-color: #5a3a1a; }
+.tag.manual { background: #1a2e3a; color: #7ac6ff; border-color: #1a4a5a; }
+.card .rowmeta { display: flex; justify-content: space-between; font-size: 0.72rem; color: var(--muted); }
 
-GOOGLE_NEWS_RSS = "https://news.google.com/rss/search?q={query}&hl={hl}&gl={gl}&ceid={ceid}"
-REDDIT_JSON = "https://www.reddit.com/r/{sub}/top.json?limit=15&t=week"
+footer { padding: 20px 16px 60px; color: var(--muted); font-size: 0.75rem; max-width: 700px; }
+.empty { padding: 40px 16px; color: var(--muted); text-align: center; }
