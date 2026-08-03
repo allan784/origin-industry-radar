@@ -1,0 +1,78 @@
+"""
+Orchestrator: fetch -> classify -> merge with history -> write site/data.json
+
+Run twice daily by the GitHub Actions workflow. Keeps a rolling 45-day
+window so the dashboard doesn't grow forever and old news drops off on its
+own.
+"""
+import json
+import os
+from datetime import datetime, timedelta, timezone
+
+from fetch import fetch_all
+from classify import enrich
+
+HERE = os.path.dirname(os.path.abspath(__file__))
+SITE_DIR = os.path.join(HERE, "..", "site")
+DATA_PATH = os.path.join(SITE_DIR, "data.json")
+ROLLING_WINDOW_DAYS = 45
+
+
+def load_existing():
+    if os.path.exists(DATA_PATH):
+        try:
+            with open(DATA_PATH, "r", encoding="utf-8") as f:
+                return json.load(f)
+        except Exception:
+            return {"items": [], "last_run": None}
+    return {"items": [], "last_run": None}
+
+
+def prune(items, days=ROLLING_WINDOW_DAYS):
+    cutoff = datetime.now(timezone.utc) - timedelta(days=days)
+    kept = []
+    for it in items:
+        fetched = it.get("fetched_at")
+        try:
+            ts = datetime.fromisoformat(fetched)
+        except Exception:
+            kept.append(it)
+            continue
+        if ts >= cutoff:
+            kept.append(it)
+    return kept
+
+
+def main():
+    existing = load_existing()
+    existing_by_id = {it["id"]: it for it in existing.get("items", [])}
+
+    raw = fetch_all()
+    new_count = 0
+    for category, items in raw.items():
+        enriched = enrich(category, items)
+        for it in enriched:
+            if it["id"] not in existing_by_id:
+                new_count += 1
+            existing_by_id[it["id"]] = it  # newer fetch wins on conflict, keeps first-seen fetched_at otherwise
+            # preserve original fetched_at (first seen) if item already existed
+    merged = list(existing_by_id.values())
+    merged = prune(merged)
+    merged.sort(key=lambda x: x.get("fetched_at", ""), reverse=True)
+
+    output = {
+        "last_run": datetime.now(timezone.utc).isoformat(),
+        "item_count": len(merged),
+        "new_this_run": new_count,
+        "items": merged,
+    }
+
+    os.makedirs(SITE_DIR, exist_ok=True)
+    with open(DATA_PATH, "w", encoding="utf-8") as f:
+        json.dump(output, f, indent=2, ensure_ascii=False)
+
+    print(f"Wrote {len(merged)} items ({new_count} new) to {DATA_PATH}")
+
+
+if __name__ == "__main__":
+    main()
