@@ -1,4 +1,3 @@
-markdown
 # Origin Fitness — Industry Radar (v1)
 
 A free, self-hosted dashboard that scans UK and international fitness-industry
