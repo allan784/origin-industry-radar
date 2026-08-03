@@ -1,0 +1,4 @@
+# Only needed for the manual, local-only LinkedIn snapshot tool.
+# Deliberately kept separate from requirements.txt so GitHub Actions never
+# installs Playwright/a browser - that pipeline should never touch LinkedIn.
+playwright==1.47.0
