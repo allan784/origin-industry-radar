@@ -1,4 +1,3 @@
-python
 """
 Weekly email digest. Reads site/data.json, pulls items from the last 7 days,
 groups by category, sends a plain-text summary email via SMTP.
