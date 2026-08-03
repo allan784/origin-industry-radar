@@ -1,4 +1,3 @@
-python
 """
 Orchestrator: fetch -> classify -> merge with history -> write site/data.json
 
