@@ -1,2 +1,44 @@
-feedparser==6.0.11
-requests==2.32.3
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Origin Fitness — Industry Radar</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <header class="topbar">
+    <div class="brand">Origin Fitness <span>Industry Radar</span></div>
+    <div class="meta" id="lastRun">Loading…</div>
+  </header>
+
+  <nav class="filters">
+    <div class="filter-group" id="categoryFilters">
+      <button class="chip active" data-cat="all">All</button>
+      <button class="chip" data-cat="consumer_fitness_trends">Consumer fitness</button>
+      <button class="chip" data-cat="consumer_equipment_trends">Consumer equipment</button>
+      <button class="chip" data-cat="gym_trends">Gym trends</button>
+      <button class="chip" data-cat="gym_equipment_trends">Gym equipment</button>
+      <button class="chip" data-cat="industry_voices">Industry voices (LinkedIn)</button>
+    </div>
+    <div class="filter-group" id="regionFilters">
+      <button class="chip active" data-region="all">All regions</button>
+      <button class="chip" data-region="uk">UK</button>
+      <button class="chip" data-region="us">USA</button>
+      <button class="chip" data-region="au">Australia</button>
+      <button class="chip" data-region="foresight">Foresight only (abroad)</button>
+    </div>
+    <input id="searchBox" type="search" placeholder="Search titles…">
+  </nav>
+
+  <main id="feed"></main>
+
+  <footer>
+    <p>Rule-based tagging, not human-verified. Treat as a discovery feed, not a finished analysis.
+       Sources: Google News search feeds + Reddit public data. LinkedIn and paywalled trade journals
+       are not covered automatically — see README.</p>
+  </footer>
+
+  <script src="app.js"></script>
+</body>
+</html>
