@@ -1,0 +1,7 @@
+__pycache__/
+*.pyc
+.venv/
+
+# LinkedIn manual tool - never commit these
+scraper/.linkedin_session.json
+scraper/.linkedin_raw/
